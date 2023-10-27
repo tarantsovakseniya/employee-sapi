@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mule xmlns:secure-properties="http://www.mulesoft.org/schema/mule/secure-properties" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:apikit="http://www.mulesoft.org/schema/mule/mule-apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:batch="http://www.mulesoft.org/schema/mule/ee/batch" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd http://www.mulesoft.org/schema/mule/mule-apikit http://www.mulesoft.org/schema/mule/mule-apikit/current/mule-apikit.xsd http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd 
+	http://www.mulesoft.org/schema/mule/ee/batch http://www.mulesoft.org/schema/mule/ee/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/secure-properties http://www.mulesoft.org/schema/mule/secure-properties/current/mule-secure-properties.xsd">
+    <http:listener-config name="employee-system-api-httpListenerConfig">
+        <http:listener-connection host="0.0.0.0" port="8081" />
+    </http:listener-config>
+    <http:request-config name="bamboo-hr-request-config" basePath="${bamboo-hr.path.base}" >
+      <http:request-connection protocol="${bamboo-hr.protocol}" host="${bamboo-hr.host}" port="${bamboo-hr.port}">
+			<http:authentication >
+				<http:basic-authentication username="${secure::bamboo-hr.auth.username}" password="${secure::bamboo-hr.auth.password}" />
+			</http:authentication>
+		</http:request-connection>
+    </http:request-config>  
+    <apikit:config name="employee-system-api-config" api="resource::8abc5586-ab4c-427f-b244-ce667fc50fac:employee-system-api:1.0.0:raml:zip:employee-system-api.raml" outboundHeadersMapName="outboundHeaders" httpStatusVarName="httpStatus" />
+    <secure-properties:config name="secure-properties-config" doc:name="Secure Properties Config" doc:id="82e275aa-b2d2-4856-a2b7-0a6d934062a1" file="secure-configuration.yaml" key="${secure.key}" >
+		<secure-properties:encrypt algorithm="Blowfish" />
+	</secure-properties:config>
+	<configuration-properties doc:name="Configuration properties" doc:id="4c9a7943-bb4a-4e68-9a12-ae2b1421c4b4" file="configuration.yaml" />
+	<flow name="employee-system-api-main">
+        <http:listener config-ref="employee-system-api-httpListenerConfig" path="/api/${api.version}/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body><![CDATA[#[payload]]]></http:body>
+                <http:headers><![CDATA[#[vars.outboundHeaders default {}]]]></http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:router config-ref="employee-system-api-config" />
+
+        <error-handler>
+            <on-error-propagate type="APIKIT:BAD_REQUEST">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Bad request"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">400</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:METHOD_NOT_ALLOWED">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Method not allowed"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">405</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_ACCEPTABLE">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not acceptable"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">406</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:UNSUPPORTED_MEDIA_TYPE">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Unsupported media type"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">415</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+            <on-error-propagate type="APIKIT:NOT_IMPLEMENTED">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Not Implemented"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">501</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="employee-system-api-console">
+        <http:listener config-ref="employee-system-api-httpListenerConfig" path="/console/*">
+            <http:response statusCode="#[vars.httpStatus default 200]">
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:response>
+            <http:error-response statusCode="#[vars.httpStatus default 500]">
+                <http:body>#[payload]</http:body>
+                <http:headers>#[vars.outboundHeaders default {}]</http:headers>
+            </http:error-response>
+        </http:listener>
+        <apikit:console config-ref="employee-system-api-config" />
+        <error-handler>
+            <on-error-propagate type="APIKIT:NOT_FOUND">
+                <ee:transform doc:name="Transform Message">
+                    <ee:message>
+                        <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{message: "Resource not found"}]]></ee:set-payload>
+                    </ee:message>
+                    <ee:variables>
+                        <ee:set-variable variableName="httpStatus">404</ee:set-variable>
+                    </ee:variables>
+                </ee:transform>
+            </on-error-propagate>
+        </error-handler>
+    </flow>
+    <flow name="patch:\employees\(employeeId):application\json:employee-system-api-config">
+        <logger level="INFO" doc:name="START" doc:id="36dfc56e-73c0-4866-9794-5bf25c0f9cc1" message="#[correlationId] - START patch employee with id [#[vars.employeeId]]" />
+		<ee:transform doc:name="Set VL employeeId">
+            <ee:variables>
+                <ee:set-variable variableName="employeeId">attributes.uriParams.'employeeId'</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+        <http:request method="POST" doc:name="POST:/employees/{id} Request" doc:id="7990eff3-444b-4e36-be25-89520bbfa755" config-ref="bamboo-hr-request-config" path="/employees/{id}">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Accept" : "application/json",
+	"Content-Type" : "application/json"
+}]]]></http:headers>
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"id" : vars.employeeId
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Set PL Prepare response">
+            <ee:message>
+                <ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+  status: "Success",
+  message: "Employee details updated"
+}]]></ee:set-payload>
+            </ee:message>
+        </ee:transform>
+		<logger level="INFO" doc:name="END" doc:id="dfba5c02-f2a7-4aa7-9e64-891abcfbb70f" message="#[correlationId] - END patch employee with id [#[vars.employeeId]]" />
+    </flow>
+    <flow name="get:\employees\(employeeId):employee-system-api-config">
+        <logger level="INFO" doc:name="START" doc:id="700bfaed-e6b3-4567-85bd-bc96c92895bd" message="#[correlationId] - START patch employee with id [#[vars.employeeId]]" />
+		<ee:transform doc:name="Set VL employeeId">
+            <ee:variables>
+                <ee:set-variable variableName="employeeId">attributes.uriParams.'employeeId'</ee:set-variable>
+            </ee:variables>
+        </ee:transform>
+    <http:request doc:name="GET:/employees/{id} Request" doc:id="bamboo-hr-request-config" config-ref="bamboo-hr-request-config" method="GET" path="/employees/{id}/">
+			<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Accept" : "application/json"
+}]]]></http:headers>
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"id" : vars.employeeId
+}]]]></http:uri-params>
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"fields" : "firstName,lastName,jobTitle,location,department,status,supervisor",
+	"onlyCurrent" : true
+}]]]></http:query-params>
+		</http:request>
+		<logger level="INFO" doc:name="END" doc:id="265f9508-5dad-4307-8baf-97081a784af8" message="#[correlationId] - END get employee with id [#[vars.employeeId]]"/>
+    </flow>
+</mule>

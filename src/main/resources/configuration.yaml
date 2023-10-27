@@ -1,0 +1,11 @@
+#API config
+api:
+  version: "v1"
+  
+#BambooHR config
+bamboo-hr:
+  protocol: "HTTPS"
+  host: "api.bamboohr.com"
+  port: ""
+  path:
+    base: "/api/gateway.php/worldofit/v1"
